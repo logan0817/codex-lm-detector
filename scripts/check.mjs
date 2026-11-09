@@ -124,7 +124,7 @@ async function main() {
     else if (result.saveError || result.report.error || !['scored', 'partial'].includes(result.report.analysis?.decision)) process.exitCode = 1;
   } catch (error) {
     const detail = cancel.signal.aborted ? { code: 'CANCELLED', message: '检测已取消。' } : publicError(error);
-    console.log(options?.json ? JSON.stringify({ error: detail })
+    console.log(options?.json || process.argv.slice(2).includes('--json') ? JSON.stringify({ error: detail })
       : await resultOutput({ report: { error: detail, cancelled: detail.code === 'CANCELLED' } }, { terminal: options?.text || Boolean(process.stdout.isTTY) }));
     process.exitCode = detail.code === 'CANCELLED' ? 130 : 1;
   } finally {

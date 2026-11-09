@@ -572,6 +572,54 @@ test('新配置变量优先，同时兼容旧变量和历史存储位置', async
   assert.equal(old.file, resolved.file);
 });
 
+test('Codex子进程同步和异步权限拒绝返回明确错误，不暴露系统错误详情', async () => {
+  for (const code of ['EPERM', 'EACCES', 'ENOENT']) {
+    const expected = code === 'ENOENT' ? 'SPAWN_FAILED' : 'PERMISSION_DENIED';
+    const error = Object.assign(new Error('private-runtime secret-marker'), { code });
+    assert.throws(() => new AppServer({ command: '/mock', prefix: [] }, null, {
+      spawnImpl: () => { throw error; },
+    }), caught => caught instanceof CheckError && caught.code === expected && !caught.message.includes('secret-marker'));
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.exitCode = 0;
+    const app = new AppServer({ command: '/mock', prefix: [] }, null, { spawnImpl: () => child });
+    const pending = app.initialize();
+    const rejected = assert.rejects(pending, caught =>
+      caught instanceof CheckError && caught.code === expected && !caught.message.includes('secret-marker'));
+    child.emit('error', error);
+    await rejected;
+    assert.equal(app.pending.size, 0);
+    await app.close();
+  }
+});
+
+test('thread not loaded 的真实命令路径报告会话访问失败且不启动采样', async t => {
+  const dir = await temporary(t);
+  const runtime = path.join(dir, 'unreadable-thread.mjs');
+  const calls = path.join(dir, 'calls.jsonl');
+  await writeFile(runtime, `import { createInterface } from 'node:readline';
+import { appendFileSync } from 'node:fs';
+const lines = createInterface({ input: process.stdin });
+lines.on('line', line => {
+  const message = JSON.parse(line);
+  appendFileSync(process.env.DETECTOR_TEST_CALLS, JSON.stringify(message.method) + '\\n');
+  if (message.method === 'initialize') process.stdout.write(JSON.stringify({ id: message.id, result: {} }) + '\\n');
+  else if (message.method === 'thread/read') process.stdout.write(JSON.stringify({ id: message.id,
+    error: { code: -32600, message: 'thread not loaded: secret-marker' } }) + '\\n');
+});
+`);
+  const result = spawnSync(process.execPath, ['scripts/check.mjs', 'doctor', '--codex', runtime, '--json'], {
+    env: { ...process.env, CODEX_THREAD_ID: 'trusted-thread', DETECTOR_TEST_CALLS: calls },
+    encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(JSON.parse(result.stdout).error.code, 'THREAD_NOT_FOUND');
+  assert.ok(!result.stdout.includes('secret-marker'));
+  const methods = (await readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(methods, ['initialize', 'initialized', 'thread/read']);
+});
+
 test('app-server采用参数数组、拒绝权限请求，关闭后清除RPC等待', async () => {
   const child = new EventEmitter();
   child.stdin = new PassThrough();
@@ -659,6 +707,23 @@ test('未知参数和不合理时限在任何请求前拒绝', () => {
   assert.throws(() => optionsFor(['--input', 'file', '--thread', 'id']), { code: 'ARGUMENT' });
   assert.throws(() => optionsFor(['--api-key', 'secret']));
   assert.throws(() => optionsFor(['--json', '--text']), { code: 'ARGUMENT' });
+});
+
+test('参数校验失败时仍遵循JSON输出要求，不回显原始参数', () => {
+  for (const args of [
+    ['--timeout', '0', '--json'],
+    ['--input', 'unused.json', '--output', 'unused-output', '--json'],
+    ['--json', '--text'],
+  ]) {
+    const result = spawnSync(process.execPath, ['scripts/check.mjs', ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(JSON.parse(result.stdout).error.code, 'ARGUMENT');
+    assert.ok(!result.stdout.includes('unused'));
+  }
+  const unknown = spawnSync(process.execPath, ['scripts/check.mjs', '--private-option', 'secret-marker', '--json'], { encoding: 'utf8' });
+  assert.equal(unknown.status, 1, unknown.stderr);
+  assert.ok(JSON.parse(unknown.stdout).error);
+  assert.ok(!unknown.stdout.includes('secret-marker'));
 });
 
 test('安装仅复制运行文件及许可，排除Git和开发文件；已有目录拒绝覆盖', async t => {

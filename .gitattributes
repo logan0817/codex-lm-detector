@@ -1,0 +1,4 @@
+# 上游文件按原始字节检出，避免换行转换破坏 SHA-256 校验。
+/vendor/lmfpd-sdk/index.mjs -text
+/vendor/data/unified_bank.json -text
+/vendor/data/shared_detector.bin -text

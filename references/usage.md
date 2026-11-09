@@ -67,7 +67,26 @@ node install.mjs
 
 检测应从目标 Codex 聊天内调用。脚本通过 `CODEX_THREAD_ID` 或 `CODEX_SESSION_ID` 定位当前任务；普通系统终端通常没有这些变量，不能直接确定要检测的聊天。
 
-macOS 已通过真实检测验证三条采样、评分、报告保存和整张结果卡片输出。Windows、Linux 目前只有模拟协议和路径逻辑测试。协议不兼容时停止，不使用其他模型或接口替代。
+已完成的真实客户端验证如下，均包含三条有效采样、评分和报告保存：
+
+| 环境 | 验证范围 |
+| --- | --- |
+| macOS 桌面端 | 首版已通过真实检测和结果卡片输出；本次修订尚未在 macOS 上复验 |
+| Windows 桌面端 | 沙箱外真实检测、结果卡片输出、自定义及默认报告目录；新版提前申请权限、允许后仅执行一次检测，以及拒绝后停止且不发起模型请求均已实测 |
+| Windows CLI（`codex exec`） | 完全访问模式及单独配置运行状态访问权限的隔离 `elevated` 沙箱下的真实检测、自动文字输出、含中文和空格的安装及报告路径 |
+| Windows CLI（交互式终端） | 完全访问模式下的真实检测、自动文字输出和报告保存 |
+
+截至 2026-11-09，Windows 已取得上述通过结果，仍存在下述受限沙箱限制；真实检测环境为 Node.js 24.14.1、Codex CLI 0.167.0-alpha.3.2。Node.js 22.22.2 和 24.14.1 的本地回归测试均为 49 项通过、0 项失败、1 项 POSIX 信号测试按平台规则跳过，Windows 终端 Ctrl+C 另行实测通过。另已检查真实连接诊断、报告离线文字／JSON 复查、Git `core.autocrlf=true` 检出及安装；限流、认证失败、额度不足、超时、进程退出、工具调用、配置变化和保存失败使用本地故障注入验证，未对真实渠道制造这些故障。
+
+权限错误处理修订后，Node.js 24.14.1 的最新回归结果为 51 项通过、0 项失败、1 项按上述平台规则跳过，新增覆盖子进程同步／异步权限拒绝，以及会话未加载时停止且不启动采样。
+
+Windows 受限沙箱验证使用已有的 `elevated` 实现和隔离的临时 `CODEX_HOME`，只向 app-server 所需的运行状态文件及临时目录授予写权限；临时目录还需要允许沙箱账号访问。连接诊断、三条有效采样、评分、报告保存和离线复查均通过，同时确认测试工作区可写，原项目文件、原配置及隔离配置不可写。原用户配置未修改，临时配置与测试状态在验证后清理。这证明 Skill 可在具备必要状态访问权限的受限沙箱中运行，不表示默认权限配置无需调整。
+
+本机 Windows 10 的 `unelevated` 沙箱仍存在 `cannot enforce split writable root sets` 或 Node 子进程启动被拒绝（`EPERM`）的限制，当前执行环境不支持 MXC。若 `doctor` 报会话读取、状态库初始化或子进程启动失败，先检查客户端沙箱与 `CODEX_HOME` 权限；不要把此类失败当作检测通过，也不要默认放开整个用户配置目录。沙箱选择和权限配置参见 [Codex 官方 Windows 沙箱说明](https://developers.openai.com/codex/windows/)。macOS CLI 与 Linux 尚未完成真实客户端验证。协议不兼容时停止，不使用其他模型或接口替代。
+
+交互式 CLI 使用原用户环境、`workspace-write` 和 `windows.sandbox=elevated` 的实测未通过：沙箱初始化完成后，`doctor` 在 app-server 的 `thread/read` 步骤收到错误码 `-32600`，原因为 `thread not loaded`，尚未发起模型检测。同一会话在沙箱外可以读取，因此已确认受限执行路径存在限制，底层状态访问失败的具体原因尚未完全确定。上述隔离沙箱通过结果不能替代普通受限配置的验收。
+
+日常使用 Windows 桌面端或 CLI 时，受限会话可通过客户端正常审批，仅允许本条检测／诊断命令在沙箱外运行，无需将整个会话切换为完全访问。Skill 会在已知受限配置下执行前申请；拒绝授权则停止。权限弹窗批准的是该命令在沙箱外执行，不表示受限沙箱本身已兼容。已知能在沙箱内运行的专门配置及用户明确要求的沙箱测试保留原权限。离线报告复查不需要这项连接权限。
 
 ## 命令与参数
 
@@ -107,7 +126,9 @@ node scripts/check.mjs doctor --codex "<Codex可执行文件绝对路径>"
 | Skill 未显示 | 在下一轮消息中调用；仍未显示时重新打开 Codex，确认安装目录正确 |
 | `NO_CURRENT_THREAD` | 回到目标 Codex 聊天内调用，不从系统终端猜测任务 |
 | `CODEX_NOT_FOUND` | 用 `--codex` 指定当前客户端配套运行时；CLI 用户可检查 Codex 安装及 PATH |
-| `THREAD_NOT_FOUND` | 核对运行时和 `CODEX_HOME` 是否属于当前客户端 |
+| `PERMISSION_DENIED` | 系统拒绝启动 Codex 子进程；Windows 受限会话可仅批准本条命令在沙箱外运行，拒绝则停止 |
+| `SPAWN_FAILED` | 核对当前 Codex 可执行文件及运行环境 |
+| `THREAD_NOT_FOUND` | 包括 `thread not loaded`；核对运行时、`CODEX_HOME` 及沙箱状态访问权限，不能仅凭此错误断言会话不存在 |
 | `MISSING_EFFORT`、`PROTOCOL_ERROR` | 运行时可能缺少所需接口或字段；保留错误并核对客户端版本 |
 | `AUTH_REQUIRED` | 在 Codex 中恢复原有登录或渠道认证后，再由用户决定是否检测 |
 | `RATE_LIMITED`、`QUOTA_EXHAUSTED` | 检查当前渠道限流或额度，失败不构成模型判断 |
@@ -199,6 +220,8 @@ npm test
 ```
 
 测试使用 Node.js 内置测试器、随包 SDK 和模拟协议，不消耗模型额度，无需 `npm install`。格式遵循根目录 `.editorconfig` 和现有代码风格。
+
+参与 SHA-256 校验的上游文件通过 `.gitattributes` 禁用 Git 文本转换，保持原始字节，避免 Windows 的 `core.autocrlf` 改写换行后导致 `ASSET_INTEGRITY`。不要修改摘要或跳过校验来解决此错误。
 
 手动安装支持 `node install.mjs --target "<绝对路径>"`，用于测试或自定义安装。只复制 `SKILL.md`、`agents/`、`assets/`、`scripts/`、`vendor/`、`references/` 和许可声明，不复制 Git 元数据及开发文件。
 

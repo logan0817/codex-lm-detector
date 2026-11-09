@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
-import { CheckError, rpcError, throwIfCancelled } from './errors.mjs';
+import { CheckError, rpcError, spawnError, throwIfCancelled } from './errors.mjs';
 
 // 仅在检测子进程中禁用通知和 hook，不修改配置文件。
 export class AppServer extends EventEmitter {
@@ -10,10 +10,14 @@ export class AppServer extends EventEmitter {
     this.pending = new Map(); this.nextId = 0; this.closed = false; this.serverRequests = 0;
     const childEnv = { ...env, CODEX_LM_DETECTOR_PROBE_PROCESS: '1' };
     if (originator) childEnv.CODEX_INTERNAL_ORIGINATOR_OVERRIDE = originator;
-    this.child = spawnImpl(runtime.command, [...runtime.prefix, 'app-server', '--stdio',
-      '-c', 'notify=[]', '-c', 'features.hooks=false'],
-      { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true, shell: false });
-    this.child.once('error', () => this.fail(new CheckError('SPAWN_FAILED', 'Codex 运行时无法启动。')));
+    try {
+      this.child = spawnImpl(runtime.command, [...runtime.prefix, 'app-server', '--stdio',
+        '-c', 'notify=[]', '-c', 'features.hooks=false'],
+        { env: childEnv, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true, shell: false });
+    } catch (error) {
+      throw spawnError(error);
+    }
+    this.child.once('error', error => this.fail(spawnError(error)));
     this.child.once('exit', () => this.fail(new CheckError('SERVER_EXITED', 'Codex 检测进程提前退出，未得到检测结果。')));
     this.child.stdin.on('error', () => this.fail(new CheckError('PIPE_CLOSED', 'Codex 检测连接已关闭。')));
     this.lines = createInterface({ input: this.child.stdout });
