@@ -1,0 +1,69 @@
+<style>
+  #clmd-ranked-card {
+    color-scheme: light dark;
+    --result-bg: light-dark(#ffffff, #191c21);
+    --result-fg: light-dark(#27303b, #edf0f5);
+    --result-muted: light-dark(#606b7a, #b3becc);
+    --result-line: light-dark(#e2e7ee, #353e4b);
+    --result-status-bg: light-dark(#edf1ff, #29324b);
+    --result-status-fg: light-dark(#5366b9, #a8b8ff);
+    color: var(--result-fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 620px;
+    margin: 0 auto;
+  }
+  #clmd-ranked-card[data-status="partial"], #clmd-ranked-card[data-status="unscorable"] { --result-status-bg: light-dark(#fff5e8, #3c3020); --result-status-fg: light-dark(#926020, #e7bf81); }
+  #clmd-ranked-card[data-status="error"] { --result-status-bg: light-dark(#fceff0, #402b32); --result-status-fg: light-dark(#ac4c5b, #edb0ba); }
+  #clmd-ranked-card[data-status="cancelled"] { --result-status-bg: light-dark(#f0f2f5, #303743); --result-status-fg: light-dark(#667184, #b8c2d3); }
+  #clmd-ranked-card .result-card { background: var(--result-bg); border: 1px solid var(--result-line); border-radius: 18px; padding: 28px; }
+  #clmd-ranked-card .result-brand { font-size: 12px; font-weight: 600; letter-spacing: 1px; margin-bottom: 22px; padding-right: 80px; }
+  #clmd-ranked-card .result-heading { display: flex; gap: 13px; align-items: center; }
+  #clmd-ranked-card .result-icon { flex: 0 0 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 13px; background: var(--result-status-bg); color: var(--result-status-fg); }
+  #clmd-ranked-card .result-icon svg { width: 23px; height: 23px; }
+  #clmd-ranked-card h2 { font-size: 21px; line-height: 1.4; font-weight: 600; margin: 0; }
+  #clmd-ranked-card .result-note { font-size: 13px; line-height: 1.7; margin: 12px 0 20px; color: var(--result-muted); }
+  #clmd-ranked-card .result-facts { display: grid; grid-template-columns: 102px minmax(0, 1fr); gap: 11px; font-size: 14px; line-height: 1.6; margin: 0 0 22px; }
+  #clmd-ranked-card dt { color: var(--result-muted); }
+  #clmd-ranked-card dd { margin: 0; overflow-wrap: anywhere; }
+  #clmd-ranked-card .result-strong { font-weight: 600; }
+  #clmd-ranked-card .result-secondary { color: var(--result-muted); }
+  #clmd-ranked-card .result-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; line-height: 1.6; }
+  #clmd-ranked-card .result-table th, #clmd-ranked-card .result-table td { padding: 10px 0; text-align: left; overflow-wrap: anywhere; border-bottom: 1px solid var(--result-line); color: var(--result-fg); background: transparent; }
+  #clmd-ranked-card .result-table th { font-weight: 400; color: var(--result-muted); }
+  #clmd-ranked-card .result-table th:last-child, #clmd-ranked-card .result-table td:last-child { width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
+  #clmd-ranked-card .result-table tbody tr:first-child { font-weight: 600; }
+  #clmd-ranked-card .result-usage { display: flex; flex-wrap: wrap; gap: 16px 28px; padding: 20px 0 16px; font-size: 13px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+  #clmd-ranked-card .result-usage span { display: block; color: var(--result-muted); font-size: 12px; margin-bottom: 3px; }
+  #clmd-ranked-card .result-usage strong { font-size: 16px; font-weight: 600; }
+  #clmd-ranked-card .result-footer { border-top: 1px solid var(--result-line); padding-top: 14px; display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between; color: var(--result-muted); font-size: 12px; line-height: 1.7; }
+  @media (max-width: 420px) {
+    #clmd-ranked-card .result-card { padding: 20px 17px; }
+    #clmd-ranked-card h2 { font-size: 18px; }
+    #clmd-ranked-card .result-facts { grid-template-columns: 88px minmax(0, 1fr); gap: 9px; }
+    #clmd-ranked-card .result-table th:last-child, #clmd-ranked-card .result-table td:last-child { width: 86px; }
+    #clmd-ranked-card .result-usage { gap: 15px 20px; }
+  }
+</style>
+<section id="clmd-ranked-card" data-status="{{STATUS}}" aria-label="Codex LM Detector 检测结果卡片">
+  <article class="result-card">
+    <div class="result-brand">CODEX LM DETECTOR</div>
+    <div class="result-heading">
+      <span class="result-icon"><i data-lucide="{{ICON}}" aria-hidden="true"></i></span>
+      <h2>{{TITLE}}</h2>
+    </div>
+    <p class="result-note">{{DETAIL}}</p>
+    {{FACTS}}
+    {{TABLE}}
+    {{ISSUES}}
+    <div class="result-usage">
+      <div><span>有效样本</span><strong>{{SAMPLES}}</strong></div>
+      <div><span>输入 Token</span><strong>{{INPUT}}</strong></div>
+      <div><span>输出 Token</span><strong>{{OUTPUT}}</strong></div>
+    </div>
+    {{COVERAGE}}
+    <div class="result-footer">
+      <span>当前配置的新请求 · 结果不代表后台身份或能力</span>
+      <span>{{HISTORY}}</span>
+    </div>
+  </article>
+</section>

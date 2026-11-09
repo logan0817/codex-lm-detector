@@ -1,0 +1,18 @@
+{
+  "name": "codex-lm-detector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "在 Codex 中沿用当前模型配置运行 lm-detector 指纹检测的 Skill",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/logan0817/codex-lm-detector.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/skill.test.mjs"
+  }
+}

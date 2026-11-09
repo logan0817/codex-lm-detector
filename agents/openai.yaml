@@ -1,0 +1,4 @@
+interface:
+  display_name: "codex-lm-detector 模型指纹检测"
+  short_description: "在 Codex 中检测当前模型，无需另填 API Key，自动展示候选排名"
+  default_prompt: "使用 $codex-lm-detector 检测当前模型，展示最接近的参考模型和结果限制。"

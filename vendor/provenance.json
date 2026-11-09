@@ -1,0 +1,17 @@
+{
+  "sdk": {
+    "name": "lmfpd-sdk",
+    "version": "0.2.0",
+    "source": "https://www.npmjs.com/package/lmfpd-sdk/v/0.2.0"
+  },
+  "data": {
+    "name": "lmfpd-data",
+    "version": "0.0.1793708131735",
+    "source": "https://www.npmjs.com/package/lmfpd-data/v/0.0.1793708131735"
+  },
+  "artifacts": {
+    "vendor/lmfpd-sdk/index.mjs": "3c17ea6400aa31e9b17d8e79977e8665832ac8c537946da4319af4ae40d1c368",
+    "vendor/data/unified_bank.json": "2e19810b40a9b2ffe84b312c20874e2932c9f151816d6348cb485c60871bd9a4",
+    "vendor/data/shared_detector.bin": "59dffad8128dca8bcf0cfb024f0fcebe7f0b7d7fbae3583b4b5d1418c18e601f"
+  }
+}
