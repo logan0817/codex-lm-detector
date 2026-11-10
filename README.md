@@ -66,7 +66,7 @@ $codex-lm-detector 检测当前模型
 
 检测报错时，先用上面的“只做诊断”检查连接和本地文件；常见错误的处理方式见[排障说明](references/usage.md#常见问题)。
 
-实现面向 macOS、Windows、Linux；目前 macOS 桌面端，以及获得沙箱外执行权限的 Windows 桌面端和 CLI 已完成真实检测。本次 Windows 默认受限配置会阻止子进程启动或会话状态访问；使用时可仅批准本条检测命令，无需将整个会话改为完全访问。macOS CLI、Linux 尚未完成真实客户端验证，详见[兼容性说明](references/usage.md#运行条件)。
+实现面向 macOS、Windows、Linux；目前获得必要执行权限的 macOS 桌面端、macOS 交互式 CLI、Windows 桌面端和 Windows CLI 已完成真实检测。macOS 桌面端默认受限沙箱已复现报告目录不可写及子进程提前退出，Windows 默认受限配置也存在连接限制；使用时可仅批准本条检测命令，无需将整个会话改为完全访问，也不要只更换报告目录后自动重试。macOS 交互式 CLI 已验证完全访问及单条命令获批后的执行，受限沙箱内真实检测、macOS `codex exec` 和 Linux 尚未完成验证，详见[兼容性说明](references/usage.md#运行条件)。
 
 ## 更多说明
 

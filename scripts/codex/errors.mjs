@@ -1,3 +1,5 @@
+import { constants } from 'node:os';
+
 export class CheckError extends Error {
   constructor(code, message) { super(message); this.name = 'CheckError'; this.code = code; }
 }
@@ -10,6 +12,13 @@ export function spawnError(error) {
   if (['EPERM', 'EACCES'].includes(error?.code))
     return new CheckError('PERMISSION_DENIED', '系统拒绝启动 Codex 子进程；若正在受限沙箱中运行，可通过客户端审批本条命令在沙箱外执行，拒绝授权则停止。');
   return new CheckError('SPAWN_FAILED', 'Codex 运行时无法启动，请核对可执行文件及运行环境。');
+}
+
+export function serverExitError(code, signal) {
+  const exitCode = Number.isInteger(code) ? code : '未返回';
+  const exitSignal = signal === null ? '无'
+    : typeof signal === 'string' && Object.hasOwn(constants.signals, signal) ? signal : '未返回';
+  return new CheckError('SERVER_EXITED', `Codex 检测进程提前退出（退出码 ${exitCode}，信号 ${exitSignal}），未得到检测结果。请核对运行时及沙箱对会话状态的访问权限；仅更换报告目录不能解决连接权限问题。`);
 }
 
 // Protocol errors can contain URLs, credentials or excerpts from the parent task.

@@ -12,7 +12,7 @@ import { createReport, completeReport, loadEngine, renderReport, readReport, pre
 import { prepareFresh, readSource, runSamples } from '../scripts/codex/probes.mjs';
 import { candidatePaths, resolveRuntime, sourceThread } from '../scripts/codex/runtime.mjs';
 import { AppServer } from '../scripts/codex/app-server.mjs';
-import { CheckError } from '../scripts/codex/errors.mjs';
+import { CheckError, serverExitError } from '../scripts/codex/errors.mjs';
 import { formatProbability, presentationFor } from '../scripts/presentation.mjs';
 import { renderCard, resultOutput } from '../scripts/card.mjs';
 import { install } from '../install.mjs';
@@ -130,6 +130,72 @@ test('用户取消使所有在途采样无效，并移除监听器', async () =>
   const result = await running;
   assert.ok(result.every(item => item.error.code === 'CANCELLED'));
   assert.equal(app.listenerCount('notification'), 0);
+});
+
+test('采样期间子进程退出保留退出码或信号、已完成回答及用量，并清理在途RPC', async t => {
+  for (const [code, signal, expected] of [[7, null, '退出码 7，信号 无'], [null, 'SIGTERM', '退出码 未返回，信号 SIGTERM']]) {
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.exitCode = null;
+    child.signalCode = null;
+    const app = new AppServer({ command: '/mock', prefix: [] }, null, { spawnImpl: () => child });
+    t.after(() => app.close());
+    const cancel = new AbortController();
+    const calls = [];
+    child.stdin.on('data', bytes => {
+      for (const line of bytes.toString().trim().split('\n')) {
+        const message = JSON.parse(line);
+        calls.push(message.method);
+        if (message.method !== 'turn/start') continue;
+        setImmediate(() => {
+          if (message.params.threadId === sessions[0].id) {
+            const turn = { id: 'completed-turn', status: 'completed' };
+            child.stdout.write(JSON.stringify({ id: message.id, result: { turn } }) + '\n');
+            for (const [method, params] of [
+              ['item/completed', { item: { type: 'agentMessage', phase: 'final_answer', text: samples[0].text } }],
+              ['thread/tokenUsage/updated', { tokenUsage: { last: { inputTokens: 7, outputTokens: 9, cachedInputTokens: 0 } } }],
+              ['turn/completed', { turn }],
+            ]) child.stdout.write(JSON.stringify({ method, params: { threadId: sessions[0].id, ...params } }) + '\n');
+          } else {
+            child.exitCode = code;
+            child.signalCode = signal;
+            child.emit('exit', code, signal);
+          }
+        });
+      }
+    });
+    const result = await runSamples(app, sessions, { timeoutMs: 1000, signal: cancel.signal });
+    assert.equal(result[0].text, samples[0].text);
+    assert.equal(result[0].error, null);
+    assert.deepEqual(result[0].usage, { input: 7, output: 9, cachedInput: 0 });
+    for (const sample of result.slice(1)) {
+      assert.equal(sample.error.code, 'SERVER_EXITED');
+      assert.ok(sample.error.message.includes(expected));
+      assert.deepEqual(Object.keys(sample.error).sort(), ['code', 'message']);
+    }
+    const report = completeReport(createReport(source, engine), result, engine);
+    assert.deepEqual(JSON.parse(JSON.stringify(report)).samples.map(sample => sample.error), result.map(sample => sample.error));
+    assert.equal(report.usage.input, 7);
+    assert.equal(calls.filter(method => method === 'turn/start').length, 2);
+    assert.equal(app.pending.size, 0);
+    assert.equal(app.listenerCount('notification'), 0);
+    assert.equal(app.listenerCount('closed'), 0);
+    assert.equal(getEventListeners(cancel.signal, 'abort').length, 0);
+  }
+});
+
+test('采样连接关闭时未知错误不泄露原始消息，缺少原因仍使用通用错误', async () => {
+  for (const error of [new Error('private-runtime secret-marker'), undefined]) {
+    const app = fakeApp('hang');
+    const running = runSamples(app, sessions, { timeoutMs: 1000 });
+    setImmediate(() => app.emit('closed', error));
+    const result = await running;
+    assert.ok(result.every(sample => sample.error.code === 'SERVER_EXITED'));
+    assert.ok(result.every(sample => sample.error.message === '检测进程提前退出。'));
+    assert.ok(!JSON.stringify(result).includes('secret-marker'));
+    assert.equal(app.listenerCount('closed'), 0);
+  }
 });
 
 for (const mode of ['timeout', 'cancel']) {
@@ -592,6 +658,30 @@ test('Codex子进程同步和异步权限拒绝返回明确错误，不暴露系
     assert.equal(app.pending.size, 0);
     await app.close();
   }
+});
+
+test('子进程退出保留退出码及信号，不暴露原始错误或启动采样', async t => {
+  assert.match(serverExitError(null, 'SIGTERM').message, /退出码 未返回，信号 SIGTERM/);
+  assert.ok(!serverExitError(null, 'secret-marker').message.includes('secret-marker'));
+  const dir = await temporary(t);
+  const runtime = path.join(dir, 'exiting-runtime.mjs');
+  await writeFile(runtime, `import { createInterface } from 'node:readline';
+createInterface({ input: process.stdin }).once('line', () => {
+  process.stderr.write('private-runtime secret-marker\\n');
+  process.exit(7);
+});
+`);
+  const result = spawnSync(process.execPath, ['scripts/check.mjs', 'doctor', '--codex', runtime, '--json'], {
+    env: { ...process.env, CODEX_THREAD_ID: 'trusted-thread' }, encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(result.status, 1, result.stderr);
+  const detail = JSON.parse(result.stdout).error;
+  assert.equal(detail.code, 'SERVER_EXITED');
+  assert.match(detail.message, /退出码 7，信号 无/);
+  assert.match(detail.message, /仅更换报告目录不能解决连接权限/);
+  assert.ok(!result.stdout.includes('secret-marker'));
+  assert.ok(!result.stderr.includes('secret-marker'));
+  assert.ok(!result.stderr.includes('数字探针'));
 });
 
 test('thread not loaded 的真实命令路径报告会话访问失败且不启动采样', async t => {

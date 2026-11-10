@@ -113,7 +113,7 @@ export async function prepareReportDirectory(directory) {
     await mkdir(root, { recursive: true, mode: 0o700 });
     await access(root, constants.W_OK);
   } catch {
-    throw new CheckError('OUTPUT_UNAVAILABLE', '报告目录不可用，请检查路径和写入权限；尚未发起模型测试请求。');
+    throw new CheckError('OUTPUT_UNAVAILABLE', '报告目录不可用，请检查路径和写入权限；尚未发起模型测试请求。受限沙箱中请通过客户端审批本条命令，不自动改用临时目录重试；报告写入与 Codex 连接都需要相应权限。');
   }
   return root;
 }

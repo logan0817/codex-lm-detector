@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
-import { CheckError, rpcError, spawnError, throwIfCancelled } from './errors.mjs';
+import { CheckError, rpcError, spawnError, serverExitError, throwIfCancelled } from './errors.mjs';
 
 // 仅在检测子进程中禁用通知和 hook，不修改配置文件。
 export class AppServer extends EventEmitter {
@@ -18,7 +18,7 @@ export class AppServer extends EventEmitter {
       throw spawnError(error);
     }
     this.child.once('error', error => this.fail(spawnError(error)));
-    this.child.once('exit', () => this.fail(new CheckError('SERVER_EXITED', 'Codex 检测进程提前退出，未得到检测结果。')));
+    this.child.once('exit', (code, signal) => this.fail(serverExitError(code, signal)));
     this.child.stdin.on('error', () => this.fail(new CheckError('PIPE_CLOSED', 'Codex 检测连接已关闭。')));
     this.lines = createInterface({ input: this.child.stdout });
     this.lines.on('line', line => {

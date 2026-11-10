@@ -87,7 +87,11 @@ export async function runSamples(app, forks, { timeoutMs = 180_000, progress = (
       finish(f, { code: 'TOOL_REQUEST', message: '探针请求了工具或授权，样本无效。' });
     }
   };
-  const closed = () => states.forEach(f => finish(f, { code: 'SERVER_EXITED', message: '检测进程提前退出。' }));
+  const closed = error => {
+    const detail = error instanceof CheckError ? { code: error.code, message: error.message }
+      : { code: 'SERVER_EXITED', message: '检测进程提前退出。' };
+    states.forEach(f => finish(f, detail));
+  };
   const cancel = () => states.forEach(f => finish(f, { code: 'CANCELLED', message: '检测已取消。' }));
   app.on('notification', handle); app.on('closed', closed); signal?.addEventListener('abort', cancel, { once: true });
   const timer = setTimeout(() => {
