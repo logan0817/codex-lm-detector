@@ -211,8 +211,17 @@ var SERVICE_TIERS = ["flex", "default", "fast", "ultrafast"];
 var serviceTierField = (format) => format === "anthropic" ? "speed" : "service_tier";
 var SPEED_BETA = "fast-mode-2026-02-01";
 var sendsSpeed = (config) => config.format === "anthropic" && config.serviceTier !== undefined && config.serviceTier !== "default";
+function userContent(format, prompt) {
+  if (typeof prompt === "string")
+    return prompt;
+  const text = { type: format === "responses" ? "input_text" : "text", text: prompt.text };
+  if (format === "anthropic")
+    return [{ type: "image", source: { type: "base64", media_type: "image/png", data: prompt.png } }, text];
+  const url = `data:image/png;base64,${prompt.png}`;
+  return [format === "responses" ? { type: "input_image", image_url: url, detail: "auto" } : { type: "image_url", image_url: { url } }, text];
+}
 function completionBody(config, prompt, system = "") {
-  const messages = [{ role: "user", content: prompt }];
+  const messages = [{ role: "user", content: userContent(config.format, prompt) }];
   let body = { model: config.model, messages, max_tokens: 8192, stream: config.stream ?? true };
   if (config.format === "anthropic") {
     if (system)
@@ -232,7 +241,9 @@ function completionBody(config, prompt, system = "") {
   } else {
     if (system)
       messages.unshift({ role: "system", content: system });
-    if (config.effort && config.effort !== "default")
+    if (/^openpangu-/i.test(config.model) && config.effort === "none")
+      body.chat_template_kwargs = { thinking: false };
+    else if (config.effort && config.effort !== "default")
       body.reasoning_effort = config.effort;
   }
   if (config.serviceTier && config.serviceTier !== "default")
@@ -568,7 +579,8 @@ async function requestSample(options, challenge, signal, update) {
   report();
   try {
     combined.throwIfAborted();
-    const { url, headers, body } = buildDetectRequest(config, challenge.prompt);
+    const prompt = options.renderPrompt ? await options.renderPrompt(challenge.prompt) : challenge.prompt;
+    const { url, headers, body } = buildDetectRequest(config, prompt);
     const init = {
       method: "POST",
       headers,
@@ -834,7 +846,18 @@ function rankSharedNumbers(numbers, artifact) {
     throw new Error("排名计算产生无效数值，请刷新后重试");
   return ranking;
 }
-var SEQUENCE_LIMITS = { autocorrelation: -0.23, small_step_share: 0.05 };
+var SEQUENCE_LIMITS = { autocorrelation: -0.23, small_step_share: 0.05, nearby_pair_share: 0.07 };
+function nearbyPairShare(numbers) {
+  let close = 0, pairs = 0;
+  for (let lag = 1;lag <= 3; lag++) {
+    for (let i = lag;i < numbers.length; i++) {
+      if (Math.abs(numbers[i] - numbers[i - lag]) <= 20)
+        close++;
+      pairs++;
+    }
+  }
+  return close / pairs;
+}
 function sequenceShape(numbers) {
   const shapes = numbers.map((n) => {
     const m = mean2(n), variance = mean2(n.map((x) => (x - m) ** 2)), steps = n.slice(1).map((x, i) => x - n[i]);
@@ -847,7 +870,7 @@ function sequenceShape(numbers) {
   return {
     autocorrelation,
     small_step_share,
-    model_like: autocorrelation <= SEQUENCE_LIMITS.autocorrelation || small_step_share <= SEQUENCE_LIMITS.small_step_share
+    model_like: autocorrelation <= SEQUENCE_LIMITS.autocorrelation || small_step_share <= SEQUENCE_LIMITS.small_step_share || median(numbers.map(nearbyPairShare)) <= SEQUENCE_LIMITS.nearby_pair_share
   };
 }
 function analyzeSharedOutputs(outputs, bank, artifact, options = {}) {

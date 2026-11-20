@@ -1,17 +1,17 @@
 {
   "sdk": {
     "name": "lmfpd-sdk",
-    "version": "0.2.0",
-    "source": "https://www.npmjs.com/package/lmfpd-sdk/v/0.2.0"
+    "version": "0.2.0+git.70159b7536a2",
+    "source": "https://github.com/Ikaleio/lm-detector/tree/70159b7536a2ceb55c478c8c9472da81d3627e59/sdk/ts"
   },
   "data": {
     "name": "lmfpd-data",
-    "version": "0.0.1793708131735",
-    "source": "https://www.npmjs.com/package/lmfpd-data/v/0.0.1793708131735"
+    "version": "0.0.1795066792725",
+    "source": "https://www.npmjs.com/package/lmfpd-data/v/0.0.1795066792725"
   },
   "artifacts": {
-    "vendor/lmfpd-sdk/index.mjs": "3c17ea6400aa31e9b17d8e79977e8665832ac8c537946da4319af4ae40d1c368",
-    "vendor/data/unified_bank.json": "2e19810b40a9b2ffe84b312c20874e2932c9f151816d6348cb485c60871bd9a4",
-    "vendor/data/shared_detector.bin": "59dffad8128dca8bcf0cfb024f0fcebe7f0b7d7fbae3583b4b5d1418c18e601f"
+    "vendor/lmfpd-sdk/index.mjs": "5a93097371b5f042d3fed67247d1d23a138378b3b88f9176f6e8ad7ae9631bc3",
+    "vendor/data/unified_bank.json": "85c7887bff9c1fd066666c23733ec259facc8f62d3f86a89d1795d088b6eccd6",
+    "vendor/data/shared_detector.bin": "a55d4bb275b09b630d9deeeac5a119077869a40dc65132ffff0ab87e58b7c9e9"
   }
 }

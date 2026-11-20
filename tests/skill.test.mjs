@@ -66,7 +66,8 @@ test('官方 SDK、参考库与清单完整，可离线生成三条不重复长�
   assert.equal(challenges.length, 3);
   assert.equal(new Set(challenges.map(item => item.expected_count)).size, 3);
   assert.ok(challenges.every(item => item.expected_count >= 292 && item.expected_count <= 332));
-  assert.ok(engine.models.length > 0);
+  assert.ok(engine.models.includes('gpt-6.2-sol'));
+  assert.ok(engine.models.includes('gpt-6.2-astra'));
 });
 
 test('包装评分与直接 SDK 结果完全一致，失败样本不参与评分', () => {
@@ -76,6 +77,19 @@ test('包装评分与直接 SDK 结果完全一致，失败样本不参与评分
     text: item.text, expected_count: item.count,
   }))));
   assert.equal(scoreSamples([failed], engine.detector), null);
+});
+
+test('弱相邻信号可生成部分排名，升序序列仍被拒绝', () => {
+  const nearbyOnly = Array.from({ length: 80 }, (_, index) => {
+    const position = index % 12 === 11 ? index - 1 : index;
+    return (position * 73) % 355 + 1;
+  });
+  const sorted = Array.from({ length: 80 }, (_, index) => index + 1);
+  const partial = scoreSamples([{ text: nearbyOnly.join(' '), count: nearbyOnly.length }], engine.detector);
+  assert.equal(partial.decision, 'partial');
+  assert.equal(partial.used_outputs, 1);
+  assert.equal(partial.probability_status, 'unavailable');
+  assert.equal(scoreSamples([{ text: sorted.join(' '), count: sorted.length }], engine.detector).decision, 'not_model');
 });
 
 test('当前任务缺失或配置字段不全时停止，不猜测最近任务', async () => {
@@ -406,12 +420,14 @@ test('错误报告和完整报告均可离线重读，不连接运行时或发�
   }
 });
 
-test('不同引擎版本的报告拒绝复查', async t => {
+test('SDK 版本或检测器摘要不同的报告拒绝复查', async t => {
   const dir = await temporary(t);
-  const report = createReport(source, engine);
-  report.engine.sdkVersion = 'other';
-  const file = await saveReport(report, dir);
-  await assert.rejects(readReport(file, engine), { code: 'ENGINE_CHANGED' });
+  for (const field of ['sdkVersion', 'detectorSha256']) {
+    const report = createReport(source, engine);
+    report.engine[field] = 'other';
+    const file = await saveReport(report, dir);
+    await assert.rejects(readReport(file, engine), { code: 'ENGINE_CHANGED' });
+  }
 });
 
 test('新报告使用统一标识，旧版报告仍可离线复查且不改写', async t => {
